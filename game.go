@@ -78,7 +78,7 @@ func (p Position) RoundY() int {
 type PlayerDirection int
 
 const (
-	verticalPlayerSpeed        = 0.007
+	verticalPlayerSpeed        = 0.006
 	horizontalPlayerSpeed      = 0.01
 	playerCountScoreMultiplier = 1.25
 	playerTimeout              = 15 * time.Second
@@ -149,15 +149,20 @@ type Player struct {
 	Marker    rune
 	Color     color.Attribute
 	Pos       *Position
+	Skipped   bool
 
 	Trail []PlayerTrailSegment
 
 	score float64
+
+	prevX float64
+	prevY float64
+	move  float64
 }
 
 // NewPlayer creates a new player. If color is below 1, a random color is chosen
 func NewPlayer(s *Session, worldWidth, worldHeight int,
-	color color.Attribute) *Player {
+	color color.Attribute, name string) *Player {
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -170,6 +175,7 @@ func NewPlayer(s *Session, worldWidth, worldHeight int,
 
 	return &Player{
 		s:         s,
+		Name:      name,
 		CreatedAt: time.Now(),
 		Marker:    playerDownRune,
 		Direction: PlayerDown,
@@ -447,7 +453,7 @@ func (gm *GameManager) HandleNewChannel(c ssh.Channel, color string) {
 		}
 	}
 
-	session := NewSession(c, g.WorldWidth(), g.WorldHeight(), finalColor)
+	session := NewSession(c, g.WorldWidth(), g.WorldHeight(), finalColor, color)
 	g.AddSession(session)
 
 	go func() {
@@ -591,7 +597,8 @@ func (g *Game) worldString(s *Session) string {
 	}
 
 	// Draw the player's color
-	colorStr := fmt.Sprintf(" %s ", playerColorNames[s.Player.Color])
+	// colorStr := fmt.Sprintf(" %s ", playerColorNames[s.Player.Color])
+	colorStr := fmt.Sprintf(" %s ", s.Player.Name)
 	colorStrColorizer := color.New(s.Player.Color).SprintFunc()
 	for i, r := range colorStr {
 		charsRemaining := len(colorStr) - i
@@ -618,7 +625,7 @@ func (g *Game) worldString(s *Session) string {
 		for _, player := range players {
 			colorizer := color.New(player.Color).SprintFunc()
 			scoreStr := fmt.Sprintf(" %s: %d",
-				playerColorNames[player.Color],
+				player.Name,
 				player.Score(),
 			)
 			for _, r := range scoreStr {
@@ -838,16 +845,16 @@ type Session struct {
 }
 
 func NewSession(c ssh.Channel, worldWidth, worldHeight int,
-	color color.Attribute) *Session {
+	color color.Attribute, name string) *Session {
 
 	s := Session{c: c, LastAction: time.Now()}
-	s.newGame(worldWidth, worldHeight, color)
+	s.newGame(worldWidth, worldHeight, color, name)
 
 	return &s
 }
 
-func (s *Session) newGame(worldWidth, worldHeight int, color color.Attribute) {
-	s.Player = NewPlayer(s, worldWidth, worldHeight, color)
+func (s *Session) newGame(worldWidth, worldHeight int, color color.Attribute, name string) {
+	s.Player = NewPlayer(s, worldWidth, worldHeight, color, name)
 }
 
 func (s *Session) didAction() {
@@ -855,7 +862,7 @@ func (s *Session) didAction() {
 }
 
 func (s *Session) StartOver(worldWidth, worldHeight int) {
-	s.newGame(worldWidth, worldHeight, s.Player.Color)
+	s.newGame(worldWidth, worldHeight, s.Player.Color, s.Player.Name)
 }
 
 func (s *Session) Read(p []byte) (int, error) {
