@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -178,8 +179,34 @@ func NewPlayer(s *Session, worldWidth, worldHeight int,
 }
 
 func (p *Player) addTrailSegment(pos Position, marker rune) {
+
+	p.Skipped = false
+	defer (func() {
+		p.prevX = pos.X
+		p.prevY = pos.Y
+	})()
+
+	if p.prevX != pos.X {
+		p.move++
+		skip := math.Mod(p.move, trailGap)
+		if skip >= 0 && skip <= 3 {
+			p.Skipped = true
+			return
+		}
+	}
+
+	if p.prevY != pos.Y {
+		p.move++
+		skip := math.Mod(p.move, trailGap)
+		if skip == 0 || skip == 1 {
+			p.Skipped = true
+			return
+		}
+	}
+
 	segment := PlayerTrailSegment{marker, pos, p.Color}
 	p.Trail = append([]PlayerTrailSegment{segment}, p.Trail...)
+
 }
 
 func (p *Player) calculateScore(delta float64, playerCount int) float64 {
@@ -260,6 +287,15 @@ func (p *Player) Update(g *Game, delta float64) {
 		pos := PositionFromInt(startX, startY)
 
 		switch {
+		// Vertical and horizontal trails
+		case endX == startX && endY < startY && p.Skipped == true:
+			p.addTrailSegment(pos, playerTrailVertical)
+		case endX < startX && endY == startY && p.Skipped == true:
+			p.addTrailSegment(pos, playerTrailHorizontal)
+		case endX == startX && endY > startY && p.Skipped == true:
+			p.addTrailSegment(pos, playerTrailVertical)
+		case endX > startX && endY == startY && p.Skipped == true:
+			p.addTrailSegment(pos, playerTrailHorizontal)
 		// Handle corners. This took an ungodly amount of time to figure out. Highly
 		// recommend you don't touch.
 		case lastSeg != nil &&
@@ -320,8 +356,13 @@ type Tile struct {
 }
 
 const (
-	gameWidth  = 78
-	gameHeight = 22
+	// gameWidth  = 78
+	// gameHeight = 22
+
+	gameWidth  = 120
+	gameHeight = 34
+
+	trailGap float64 = 30
 
 	keyW = 'w'
 	keyA = 'a'
